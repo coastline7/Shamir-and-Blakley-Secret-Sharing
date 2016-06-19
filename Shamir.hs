@@ -5,43 +5,39 @@ import System.Random
 import System.IO
 import Control.Monad
 import Control.Monad.Fix
+import Data.Bits
+import Math.NumberTheory.Primes.Testing -- it uses arithmoi package for Baillie PSW test 
 
 takeN :: Integer -> [a] -> [a]
 takeN n l = take (fromIntegral n) l
 
 -- given set A, return set of all subsets of A having length = k
-getSubsets :: Integer -> [a] -> [[a]]
-getSubsets k = filterSubsets k . getSubsets'
+getSubs :: Integer -> [a] -> [[a]]
+getSubs k = filterSubsets k . getSubsets 
  where 
-	getSubsets' [] = [[]]
-	getSubsets' (x:xs) = s ++ map (x:) s where s = getSubsets' xs
+	getSubsets :: [a] -> [[a]]
+	getSubsets s = [getElements s mask [] | mask <- [1 .. 2^(length s)]]
+
+	getElements :: [a] -> Integer -> [a] -> [a]
+	getElements _      0 ys = ys
+	getElements []     _ ys = ys
+	getElements (x:xs) n ys = getElements xs (div n 2) (testElement (rem n 2) x ys)
+
+	testElement :: Integer -> a -> [a] -> [a]
+	testElement flag x xs = if (flag == 1) then (x:xs) else xs
 
 	filterSubsets :: Integer -> [[a]]-> [[a]]
 	filterSubsets k [] = []
 	filterSubsets k (x:xs)= if (fromIntegral (length x) == k) then (x:filterSubsets k xs) else filterSubsets k xs
-
--- return all prime numbers using Sieve of Eratosthenes
-allPrimes :: [Integer]
-allPrimes = sieve [2..]
- where
-	sieve (x:xs) = x:sieve (filter ((/=0).(`mod` x)) xs)
-	
--- return random prime p from 100 prime numbers (all > max (n, M))
-getPrime :: Integer -> Integer -> IO Integer
-getPrime n m = do 
-	xs <- return $ take 100 [x | x <- allPrimes, x > max n m]
-	n <- randomRIO (0, length xs - 1)
-	p <- return $ xs !! n
-	return $ p
 	
 -- given k and p, return list of k-1 numbers from finite field p
 randomList :: Integer -> Integer -> IO [Integer]
 randomList k p = do 
-    listZp <- generate 0 (p-1)
-    return $ takeN (k-1) listZp
+    list <- genB 0 (p-1)
+    return $ takeN (k-1) list
  where 
-	generate :: Random a => a -> a -> IO [a]
-	generate a b = fmap (randomRs (a,b)) newStdGen
+	genB :: Random a => a -> a -> IO [a]
+	genB a b = fmap (randomRs (a,b)) newStdGen
 
 type Polynomial = [Integer] --Polynomials are represented in ascending degree order
 
@@ -64,21 +60,28 @@ evalShares poly points p = zip [1..] [evalPoly poly x p | x <- points]
 calcLagrange :: Integer -> [(Integer, Integer)] -> Integer
 calcLagrange p terms = (sum $ map g terms) `mod` p
   where
-    g (c, y) = y * l c
-    l i	= product [f x | (x, _) <- terms, x /= i]
+    g (c, y)	= y * l c
+    l i		= product [f x | (x, _) <- terms, x /= i]
       where
-        f x	= (-x) * inverse (i - x) p
-    inverse a = fst . eGCD a
+        f x	= (-x) * inverse (i - x) p	-- f = (0-x) / (c-x)
+    inverse a 	= fst . eGCD a
     eGCD a b
-      | b == 0	= (1, 0)
-      | otherwise = (t, s - q * t)
+      | b == 0		= (1, 0)
+      | otherwise	= (t, s - q * t)
         where
           (q, r) = divMod a b
           (s, t) = eGCD b r
+		  
+rndPrime :: Integer -> IO Integer
+rndPrime bits = 
+	fix $ \again -> do
+	x <- fmap (.|. 1) $ randomRIO (2*bits, 3*bits)
+	if isPrime x then return x else again
 
-test m k n k' = do 
+shamir m k n k' = do 
 --encrypt section
-	p <- getPrime n m
+	maxbound <- return $ 1 + max m n
+	p <- rndPrime maxbound
 	coeff <- randomList k p 
 	polynomial <- return $ returnPoly coeff m 
 	shares <- return $ evalShares polynomial [1..n] p
@@ -86,11 +89,11 @@ test m k n k' = do
 	putStr $ "secret = "
 	print $ m
 	
-	putStr $ "p = "
+	{-putStr $ "p = "
 	print $ p
 	
 	putStr $ "polynomial = "
-	print $ polynomial
+	print $ polynomial-}
 	
 	putStr $ "shares = "
 	print $ shares
@@ -100,15 +103,13 @@ test m k n k' = do
 
 -- decrypt section
 decrypt k' p shares = do
-	sharesSubset <- return $ (getSubsets k' shares)
+	sharesSubset <- return $ (getSubs k' shares)
 	index <- randomRIO (0, length sharesSubset - 1)
 	shares' <- return $ sharesSubset !! index
 	secret <- return $ calcLagrange p shares'
 	
-	putStr $ "k shares = "
-	print $ shares'
+	--putStr $ "k shares = "
+	--print $ shares'
 	
 	putStr $ "secret = "
 	print $ secret
-	
-	return $ secret 
