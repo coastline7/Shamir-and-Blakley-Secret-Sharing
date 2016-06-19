@@ -1,1 +1,0 @@
-# Shamir-s-Secret-Sharing
