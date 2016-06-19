@@ -6,29 +6,21 @@ import System.IO
 import Control.Monad
 import Control.Monad.Fix
 import Data.Bits
-import Math.NumberTheory.Primes.Testing -- it uses arithmoi package for Baillie PSW test 
+import Math.NumberTheory.Primes.Testing
 
 takeN :: Integer -> [a] -> [a]
 takeN n l = take (fromIntegral n) l
 
 -- given set A, return set of all subsets of A having length = k
 getSubs :: Integer -> [a] -> [[a]]
-getSubs k = filterSubsets k . getSubsets 
- where 
-	getSubsets :: [a] -> [[a]]
-	getSubsets s = [getElements s mask [] | mask <- [1 .. 2^(length s)]]
+getSubs k = filterSubsets k . getSubsets'
+ where
+  getSubsets' [] = [[]]
+  getSubsets' (x:xs) = s ++ map (x:) s where s = getSubsets' xs
 
-	getElements :: [a] -> Integer -> [a] -> [a]
-	getElements _      0 ys = ys
-	getElements []     _ ys = ys
-	getElements (x:xs) n ys = getElements xs (div n 2) (testElement (rem n 2) x ys)
-
-	testElement :: Integer -> a -> [a] -> [a]
-	testElement flag x xs = if (flag == 1) then (x:xs) else xs
-
-	filterSubsets :: Integer -> [[a]]-> [[a]]
-	filterSubsets k [] = []
-	filterSubsets k (x:xs)= if (fromIntegral (length x) == k) then (x:filterSubsets k xs) else filterSubsets k xs
+  filterSubsets :: Integer -> [[a]]-> [[a]]
+  filterSubsets k [] = []
+  filterSubsets k (x:xs)= if (fromIntegral (length x) == k) then (x:filterSubsets k xs) else filterSubsets k xs
 	
 -- given k and p, return list of k-1 numbers from finite field p
 randomList :: Integer -> Integer -> IO [Integer]
